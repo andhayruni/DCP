@@ -11,6 +11,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.optim.lr_scheduler import MultiStepLR
+
+from MinkowskiNet.config import str2list
 from data import ModelNet40
 from model import DCP
 from util import transform_point_cloud, npmat2euler
@@ -522,8 +524,8 @@ def main():
                         choices=['dcp'],
                         help='Model to use, [dcp]')
     parser.add_argument('--emb_nn', type=str, default='pointnet', metavar='N',
-                        choices=['pointnet', 'dgcnn'],
-                        help='Embedding nn to use, [pointnet, dgcnn]')
+                        choices=['pointnet', 'dgcnn', 'minkowski'],
+                        help='Embedding nn to use, [pointnet, dgcnn, minkowski]')
     parser.add_argument('--pointer', type=str, default='transformer', metavar='N',
                         choices=['identity', 'transformer'],
                         help='Attention-based pointer generator to use, [identity, transformer]')
@@ -572,6 +574,12 @@ def main():
                         help='Divided factor for rotations')
     parser.add_argument('--model_path', type=str, default='', metavar='N',
                         help='Pretrained model path')
+    # dilations, bn_momentum, conv1_kernel_size
+    parser.add_argument(
+        '--dilations', type=str2list, default='1,1,1,1', help='Dilations used for ResNet or DenseNet')
+    parser.add_argument('--bn_momentum', type=float, default=0.02)
+    parser.add_argument(
+    '--conv1_kernel_size', type=int, default=3, help='First layer conv kernel size')
 
     args = parser.parse_args()
     torch.backends.cudnn.deterministic = True

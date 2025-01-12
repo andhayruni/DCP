@@ -2,17 +2,15 @@
 # -*- coding: utf-8 -*-
 
 
-import os
-import sys
-import glob
-import h5py
 import copy
 import math
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.autograd import Variable
+
+from MinkowskiNet.config import get_config
+from MinkowskiNet.models.modules.resnet_block import BasicBlock
+from MinkowskiNet.models.resnet import ResNetBase
 from util import quat2mat
 
 
@@ -308,6 +306,14 @@ class DGCNN(nn.Module):
         x = F.relu(self.bn5(self.conv5(x))).view(batch_size, -1, num_points)
         return x
 
+class MinkowskiNet18(ResNetBase):
+    BLOCK = BasicBlock
+    LAYERS = (2, 2, 2, 2)
+
+    def __init__(self, in_channels=3, emb_dims=512, config=None, D=3, **kwargs):
+        # self.emb_dims = emb_dims
+        super().__init__(in_channels, emb_dims, config, D, **kwargs)
+
 
 class MLPHead(nn.Module):
     def __init__(self, args):
@@ -434,6 +440,9 @@ class DCP(nn.Module):
             self.emb_nn = PointNet(emb_dims=self.emb_dims)
         elif args.emb_nn == 'dgcnn':
             self.emb_nn = DGCNN(emb_dims=self.emb_dims)
+        elif args.emb_nn == 'minkowski':
+
+            self.emb_nn = MinkowskiNet18(3, self.emb_dims, args, 3)
         else:
             raise Exception('Not implemented')
 
