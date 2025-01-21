@@ -318,7 +318,6 @@ def train(args, net, train_loader, test_loader, boardio, textio):
     best_test_t_mae_ba = np.inf
 
     for epoch in range(args.epochs):
-        scheduler.step()
         train_loss, train_cycle_loss, \
         train_mse_ab, train_mae_ab, train_mse_ba, train_mae_ba, train_rotations_ab, train_translations_ab, \
         train_rotations_ab_pred, \
@@ -329,6 +328,9 @@ def train(args, net, train_loader, test_loader, boardio, textio):
         test_rotations_ab_pred, \
         test_translations_ab_pred, test_rotations_ba, test_translations_ba, test_rotations_ba_pred, \
         test_translations_ba_pred, test_eulers_ab, test_eulers_ba = test_one_epoch(args, net, test_loader)
+
+        scheduler.step()
+
         train_rmse_ab = np.sqrt(train_mse_ab)
         test_rmse_ab = np.sqrt(test_mse_ab)
 
@@ -608,7 +610,7 @@ def main():
     if args.model == 'dcp':
         net = DCP(args).cuda()
         if args.eval:
-            if args.model_path is '':
+            if args.model_path == '':
                 model_path = 'checkpoints' + '/' + args.exp_name + '/models/model.best.t7'
             else:
                 model_path = args.model_path
@@ -616,7 +618,7 @@ def main():
             if not os.path.exists(model_path):
                 print("can't find pretrained model")
                 return
-            net.load_state_dict(torch.load(model_path), strict=False)
+            net.load_state_dict(torch.load(model_path, weights_only=True), strict=False)
         if torch.cuda.device_count() > 1:
             net = nn.DataParallel(net)
             print("Let's use", torch.cuda.device_count(), "GPUs!")
