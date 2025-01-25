@@ -22,6 +22,8 @@ python main.py --exp_name=dcp_v1 --model=dcp --emb_nn=dgcnn --pointer=identity -
 ### DCP-v2
 
 python main.py --exp_name=dcp_v2 --model=dcp --emb_nn=dgcnn --pointer=transformer --head=svd
+python main.py --exp_name=hausdorf_loss --model=dcp --emb_nn=dgcnn --pointer=transformer --head=svd
+
 
 ## Testing
 
