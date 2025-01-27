@@ -9,7 +9,8 @@ import h5py
 import numpy as np
 from scipy.spatial.transform import Rotation
 from torch.utils.data import Dataset
-
+from scipy.spatial import KDTree
+import open3d as o3d
 
 # Part of the code is referred from: https://github.com/charlesq34/pointnet
 
@@ -58,12 +59,66 @@ def jitter_pointcloud(pointcloud, sigma=0.01, clip=0.05):
     return pointcloud
 
 
+def chunk_occlusion(pointcloud, num_to_remove):
+    # Transpose to (N, 3) for easier spatial operations
+    pointcloud = pointcloud.T
+    
+    # Build a KDTree for efficient nearest-neighbor search
+    tree = KDTree(pointcloud)
+    
+    # Randomly select a base point
+    base_index = np.random.randint(0, pointcloud.shape[0])
+    base_point = pointcloud[base_index]
+    
+    # Adjust radius iteratively until exactly `num_to_remove` points are selected
+    radius = 0.1  # Start with a small radius
+    while True:
+        indices = tree.query_ball_point(base_point, radius)
+        if len(indices) >= num_to_remove:
+            # Select exactly `num_to_remove` points
+            indices = np.random.choice(indices, size=num_to_remove, replace=False)
+            break
+        radius += 0.01  # Increase radius gradually
+
+    # Mask out the selected indices
+    mask = np.ones(pointcloud.shape[0], dtype=bool)
+    mask[indices] = False
+    pointcloud_occluded = pointcloud[mask]
+    
+    # Transpose back to (3, N)
+    return pointcloud_occluded.T
+
+def downsample_pointcloud(pointcloud, target_size=1024):
+    current_size = pointcloud.shape[1]
+    if current_size > target_size:
+        selected_indices = np.random.choice(current_size, target_size, replace=False)
+        pointcloud = pointcloud[:, selected_indices]
+    return pointcloud
+
+def save_pointcloud_to_ply(pointcloud, filename, color="red"):
+    # Convert point cloud to Open3D format
+    pc = o3d.geometry.PointCloud()
+    pc.points = o3d.utility.Vector3dVector(pointcloud.T)  # Open3D expects (N, 3)
+
+    # Assign colors based on the color parameter
+    if color == "red":
+        pc.colors = o3d.utility.Vector3dVector(np.tile([1, 0, 0], (pointcloud.shape[1], 1)))  # Red
+    elif color == "green":
+        pc.colors = o3d.utility.Vector3dVector(np.tile([0, 1, 0], (pointcloud.shape[1], 1)))  # Green
+    else:
+        raise ValueError("Color not supported. Please choose 'red' or 'green'.")
+
+    # Save to .ply file
+    o3d.io.write_point_cloud(filename, pc)
+    print(f"Saved point cloud to {filename} with color {color}")
+
 class ModelNet40(Dataset):
-    def __init__(self, num_points, partition='train', gaussian_noise=False, unseen=False, factor=4):
+    def __init__(self, num_points, partition='train', gaussian_noise=False, occlusion_ratio=0.0, unseen=False, factor=4):
         self.data, self.label = load_data(partition)
         self.num_points = num_points
         self.partition = partition
         self.gaussian_noise = gaussian_noise
+        self.occlusion_ratio = occlusion_ratio
         self.unseen = unseen
         self.label = self.label.squeeze()
         self.factor = factor
@@ -111,6 +166,13 @@ class ModelNet40(Dataset):
 
         rotation_ab = Rotation.from_euler('zyx', [anglez, angley, anglex])
         pointcloud2 = rotation_ab.apply(pointcloud1.T).T + np.expand_dims(translation_ab, axis=1)
+
+        if self.occlusion_ratio != 0.0:
+            num_points_to_remove = int(pointcloud2.shape[1] * self.occlusion_ratio)
+            #save_pointcloud_to_ply(pointcloud2, "pointcloud_before_occlusion.ply", "red")
+            pointcloud2 = chunk_occlusion(pointcloud2, num_points_to_remove)
+            #save_pointcloud_to_ply(pointcloud2, "pointcloud_after_occlusion.ply", "green")
+            pointcloud1 = downsample_pointcloud(pointcloud1, target_size=pointcloud2.shape[1])
 
         euler_ab = np.asarray([anglez, angley, anglex])
         euler_ba = -euler_ab[::-1]

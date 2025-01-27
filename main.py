@@ -562,6 +562,8 @@ def main():
                         help='Whether to use cycle consistency')
     parser.add_argument('--gaussian_noise', type=bool, default=False, metavar='N',
                         help='Wheter to add gaussian noise')
+    parser.add_argument('--occlusion_ratio', type=float, default=0.0, metavar='N',
+                        help='occlusion ratio')
     parser.add_argument('--unseen', type=bool, default=False, metavar='N',
                         help='Wheter to test on unseen category')
     parser.add_argument('--num_points', type=int, default=1024, metavar='N',
@@ -588,11 +590,11 @@ def main():
     if args.dataset == 'modelnet40':
         train_loader = DataLoader(
             ModelNet40(num_points=args.num_points, partition='train', gaussian_noise=args.gaussian_noise,
-                       unseen=args.unseen, factor=args.factor),
+                       occlusion_ratio=args.occlusion_ratio, unseen=args.unseen, factor=args.factor),
             batch_size=args.batch_size, shuffle=True, drop_last=True)
         test_loader = DataLoader(
             ModelNet40(num_points=args.num_points, partition='test', gaussian_noise=args.gaussian_noise,
-                       unseen=args.unseen, factor=args.factor),
+                       occlusion_ratio=args.occlusion_ratio, unseen=args.unseen, factor=args.factor),
             batch_size=args.test_batch_size, shuffle=False, drop_last=False)
     else:
         raise Exception("not implemented")
