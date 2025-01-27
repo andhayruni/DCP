@@ -13,6 +13,8 @@ tqdm
 
 TensorboardX: https://github.com/lanpa/tensorboardX
 
+pymeshlab
+
 ## Training
 
 ### DCP-v1
@@ -22,6 +24,16 @@ python main.py --exp_name=dcp_v1 --model=dcp --emb_nn=dgcnn --pointer=identity -
 ### DCP-v2
 
 python main.py --exp_name=dcp_v2 --model=dcp --emb_nn=dgcnn --pointer=transformer --head=svd
+
+## Visualization
+
+### DCP-v1
+
+python visualization.py --exp_name=dcp_v1 --model=dcp --emb_nn=dgcnn --pointer=identity --head=svd --id=0
+
+### DCP-v2
+
+python visualization.py --exp_name=dcp_v2 --model=dcp --emb_nn=dgcnn --pointer=transformer --head=svd --id=0
 
 ## Testing
 
