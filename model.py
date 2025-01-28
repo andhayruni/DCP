@@ -7,11 +7,13 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import open3d as o3d
 
 from MinkowskiNet.config import get_config
 from MinkowskiNet.models.modules.resnet_block import BasicBlock
 from MinkowskiNet.models.resnet import ResNetBase
 from util import quat2mat
+import numpy as np
 
 
 # Part of the code is referred from: http://nlp.seas.harvard.edu/2018/04/03/attention.html#positional-encoding
@@ -70,6 +72,95 @@ def get_graph_feature(x, k=20):
     feature = torch.cat((feature, x), dim=3).permute(0, 3, 1, 2)
 
     return feature
+
+def resample_mesh(mesh_cad, density=1):
+    '''
+    https://chrischoy.github.io/research/barycentric-coordinate-for-mesh-sampling/
+    Samples point cloud on the surface of the model defined as vectices and
+    faces. This function uses vectorized operations so fast at the cost of some
+    memory.
+
+    param mesh_cad: low-polygon triangle mesh in o3d.geometry.TriangleMesh
+    param density: density of the point cloud per unit area
+    param return_numpy: return numpy format or open3d pointcloud format
+    return resampled point cloud
+
+    Reference :
+      [1] Barycentric coordinate system
+      \begin{align}
+        P = (1 - \sqrt{r_1})A + \sqrt{r_1} (1 - r_2) B + \sqrt{r_1} r_2 C
+      \end{align}
+    '''
+    faces = np.array(mesh_cad.triangles).astype(int)
+    vertices = np.array(mesh_cad.vertices)
+
+    vec_cross = np.cross(vertices[faces[:, 0], :] - vertices[faces[:, 2], :],
+                         vertices[faces[:, 1], :] - vertices[faces[:, 2], :])
+    face_areas = np.sqrt(np.sum(vec_cross**2, 1))
+
+    n_samples = (np.sum(face_areas) * density).astype(int)
+
+    n_samples_per_face = np.ceil(density * face_areas).astype(int)
+    floor_num = np.sum(n_samples_per_face) - n_samples
+    if floor_num > 0:
+        indices = np.where(n_samples_per_face > 0)[0]
+        floor_indices = np.random.choice(indices, floor_num, replace=True)
+        n_samples_per_face[floor_indices] -= 1
+
+    n_samples = np.sum(n_samples_per_face)
+
+    # Create a vector that contains the face indices
+    sample_face_idx = np.zeros((n_samples,), dtype=int)
+    acc = 0
+    for face_idx, _n_sample in enumerate(n_samples_per_face):
+        sample_face_idx[acc:acc + _n_sample] = face_idx
+        acc += _n_sample
+
+    r = np.random.rand(n_samples, 2)
+    A = vertices[faces[sample_face_idx, 0], :]
+    B = vertices[faces[sample_face_idx, 1], :]
+    C = vertices[faces[sample_face_idx, 2], :]
+
+    P = (1 - np.sqrt(r[:, 0:1])) * A + \
+        np.sqrt(r[:, 0:1]) * (1 - r[:, 1:]) * B + \
+        np.sqrt(r[:, 0:1]) * r[:, 1:] * C
+
+    return P
+
+class RandomRotation:
+
+    def _M(self, axis, theta):
+        return expm(np.cross(np.eye(3), axis / norm(axis) * theta))
+
+    def __call__(self, coords, feats):
+        R = self._M(
+            np.random.rand(3) - 0.5, 2 * np.pi * (np.random.rand(1) - 0.5))
+        return coords @ R, feats
+
+
+class RandomScale:
+
+    def __init__(self, min, max):
+        self.scale = max - min
+        self.bias = min
+
+    def __call__(self, coords, feats):
+        s = self.scale * np.random.rand(1) + self.bias
+        return coords * s, feats
+
+
+class RandomShear:
+
+    def __call__(self, coords, feats):
+        T = np.eye(3) + np.random.randn(3, 3)
+        return coords @ T, feats
+
+
+class RandomTranslation:
+
+    def __call__(self, coords, feats):
+        trans = 0.05 * np.random.randn(1, 3)
+        return coords + trans, feats
 
 
 class EncoderDecoder(nn.Module):

@@ -125,6 +125,7 @@ class ResNetBase(Model):
     return nn.Sequential(*layers)
 
   def forward(self, x):
+    print(type(x))
     x = self.conv1(x)
     x = self.bn1(x)
     x = self.relu(x)
